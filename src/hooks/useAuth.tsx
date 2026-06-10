@@ -84,12 +84,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (response.success && response.user) {
         setUser(response.user);
-        console.log('User state set to:', response.user); // Debug log
-        console.log('Redirecting to profile...'); // Debug log
         // Force redirect with a small delay to ensure state is set
         setTimeout(() => {
-          console.log('Executing redirect...'); // Debug log
-          window.location.href = '/profile';
+          window.location.href = '/dashboard';
         }, 100);
       } else {
         setError(response.message || 'Login failed');
@@ -109,15 +106,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError(null);
       const response = await api.signup({ email, password, firstName, lastName, phone, acceptTerms, confirmPassword });
       
-      console.log('Signup response:', response); // Debug log
-      
       if (response.success && response.user) {
         setUser(response.user);
-        console.log('Redirecting to profile after signup...'); // Debug log
         // Force redirect with a small delay to ensure state is set
         setTimeout(() => {
-          console.log('Executing redirect after signup...'); // Debug log
-          window.location.href = '/profile';
+          window.location.href = '/dashboard';
         }, 100);
       } else {
         setError(response.message || 'Signup failed');

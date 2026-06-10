@@ -11,7 +11,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const { login, loading, error } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, error } = useAuth();
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -38,10 +39,15 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     if (!validateForm()) return;
     
     try {
+      setIsSubmitting(true);
+      console.log('Attempting login with:', email);
       await login(email, password);
       onSuccess?.();
     } catch (err) {
+      console.error('Login error:', err);
       // Error is handled by useAuth hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -59,7 +65,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
             placeholder="Enter your email"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {errors.email && (
             <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -77,7 +83,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
             placeholder="Enter your password"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {errors.password && (
             <p className="mt-1 text-sm text-red-600">{errors.password}</p>
@@ -92,10 +98,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={isSubmitting}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Logging in...' : 'Login'}
+          {isSubmitting ? 'Logging in...' : 'Login'}
         </button>
       </form>
     </div>

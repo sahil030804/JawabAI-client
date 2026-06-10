@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:3120';
+// const API_BASE_URL = 'http://localhost:3120';
+const API_BASE_URL = '';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -21,6 +22,7 @@ export interface User {
   firstName: string;
   lastName: string;
   phone: string;
+  avatarUrl?: string;
   isActive: boolean;
   role: string;
   createdAt: string;
@@ -40,6 +42,79 @@ export interface SignupCredentials extends LoginCredentials {
   confirmPassword: string;
 }
 
+// WhatsApp OAuth types
+export interface AuthUrlResponse {
+  success: boolean;
+  url: string;
+  state: string;
+  message?: string;
+}
+
+export interface ExchangeTokenRequest {
+  code: string;
+  state?: string;
+}
+
+export interface WhatsAppAccount {
+  id: number;
+  waba_id: string;
+  business_id: string;
+  phone_number_id: string;
+  webhook_id?: string;
+  is_active: boolean;
+  token_expires_at: string;
+  created_at: string;
+}
+
+export interface ExchangeTokenResponse {
+  success: boolean;
+  account: WhatsAppAccount;
+  message?: string;
+}
+
+export interface WhatsAppAccountsResponse {
+  success: boolean;
+  accounts: WhatsAppAccount[];
+  message?: string;
+}
+
+// Knowledge Base types
+export interface KnowledgeDocument {
+  id: number;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  chunk_count: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UploadDocumentResponse {
+  success: boolean;
+  document: {
+    id: number;
+    originalName: string;
+    status: 'pending' | 'processing' | 'ready' | 'failed';
+    fileSize: number;
+    createdAt: string;
+  };
+  message?: string;
+}
+
+export interface DocumentListResponse {
+  success: boolean;
+  documents: KnowledgeDocument[];
+  message?: string;
+}
+
+export interface DocumentDetailResponse {
+  success: boolean;
+  document: KnowledgeDocument;
+  message?: string;
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -56,7 +131,7 @@ async function apiRequest<T = any>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -66,9 +141,15 @@ async function apiRequest<T = any>(
     ...options,
   };
 
+  // Remove Content-Type for FormData (browser sets it with boundary)
+  if (options.body instanceof FormData || config.body instanceof FormData) {
+    const headers = config.headers as Record<string, string>;
+    delete headers['Content-Type'];
+  }
+
   try {
     const response = await fetch(url, config);
-    
+
     if (!response.ok) {
       let errorData;
       try {
@@ -76,7 +157,7 @@ async function apiRequest<T = any>(
       } catch {
         errorData = { message: 'Something went wrong' };
       }
-      
+
       throw new ApiError(
         errorData.message || `HTTP error! status: ${response.status}`,
         response.status,
@@ -90,11 +171,11 @@ async function apiRequest<T = any>(
     if (error instanceof ApiError) {
       throw error;
     }
-    
+
     if (error instanceof Error) {
       throw new ApiError(error.message, 0);
     }
-    
+
     throw new ApiError('An unexpected error occurred', 0);
   }
 }
@@ -123,6 +204,49 @@ export const api = {
 
   checkEmail: (email: string) =>
     apiRequest<EmailCheckResponse>(`/auth/check-email/${email}`),
+
+  // WhatsApp OAuth endpoints
+  getAuthUrl: () =>
+    apiRequest<AuthUrlResponse>('/meta/auth-url'),
+
+  exchangeToken: (data: ExchangeTokenRequest) =>
+    apiRequest<ExchangeTokenResponse>('/meta/exchange-token', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getAccounts: () =>
+    apiRequest<WhatsAppAccountsResponse>('/meta/accounts'),
+
+  disconnectAccount: (id: number) =>
+    apiRequest<ApiResponse>(`/meta/accounts/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Knowledge Base endpoints
+  uploadDocument: (file: File, waAccountId?: number) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (waAccountId !== undefined) {
+      formData.append('waAccountId', String(waAccountId));
+    }
+
+    return apiRequest<UploadDocumentResponse>('/knowledge-base/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  listDocuments: () =>
+    apiRequest<DocumentListResponse>('/knowledge-base/documents'),
+
+  getDocument: (id: number) =>
+    apiRequest<DocumentDetailResponse>(`/knowledge-base/documents/${id}`),
+
+  deleteDocument: (id: number) =>
+    apiRequest<ApiResponse>(`/knowledge-base/documents/${id}`, {
+      method: 'DELETE',
+    }),
 
   // System endpoints
   healthCheck: () =>

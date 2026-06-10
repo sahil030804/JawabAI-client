@@ -30,7 +30,8 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
     acceptTerms?: string;
   }>({});
   const [emailChecking, setEmailChecking] = useState(false);
-  const { signup, loading, error } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { signup, error } = useAuth();
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup debounce on unmount
@@ -153,6 +154,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
     if (!validateForm()) return;
     
     try {
+      setIsSubmitting(true);
       await signup(
         formData.email,
         formData.password,
@@ -165,6 +167,8 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
       onSuccess?.();
     } catch (err) {
       // Error is handled by useAuth hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -183,7 +187,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
               onChange={handleInputChange('firstName')}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
               placeholder="First Name"
-              disabled={loading}
+              disabled={isSubmitting}
             />
             {errors.firstName && (
               <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>
@@ -201,7 +205,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
               onChange={handleInputChange('lastName')}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
               placeholder="Last Name"
-              disabled={loading}
+              disabled={isSubmitting}
             />
             {errors.lastName && (
               <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
@@ -220,7 +224,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
             onChange={handleInputChange('email')}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:outline-none transition-colors border-gray-300 focus:ring-green-500 focus:border-green-500 text-gray-900 placeholder-gray-400 pr-10"
             placeholder="Enter your email"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {emailChecking && (
             <div className="absolute right-3 top-3">
@@ -252,7 +256,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
             onChange={handleInputChange('phone')}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
             placeholder="+91 98765 43210"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {errors.phone && (
             <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
@@ -270,7 +274,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
             onChange={handleInputChange('password')}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
             placeholder="At least 6 characters"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {errors.password && (
             <p className="mt-1 text-sm text-red-600">{errors.password}</p>
@@ -288,7 +292,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
             onChange={handleInputChange('confirmPassword')}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors text-gray-900 placeholder-gray-400"
             placeholder="Confirm your password"
-            disabled={loading}
+            disabled={isSubmitting}
           />
           {errors.confirmPassword && (
             <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
@@ -303,7 +307,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
               checked={formData.acceptTerms}
               onChange={handleInputChange('acceptTerms')}
               className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-              disabled={loading}
+              disabled={isSubmitting}
             />
             <span className="text-sm text-gray-700">
               I accept the{' '}
@@ -329,10 +333,10 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
 
         <button
           type="submit"
-          disabled={loading || emailChecking || !!errors.emailExists}
+          disabled={isSubmitting || emailChecking || !!errors.emailExists}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Registering...' : 'Register'}
+          {isSubmitting ? 'Registering...' : 'Register'}
         </button>
       </form>
     </div>

@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* JawabAI Color Palette */
+  --whatsapp-green: #25D366;
+  --whatsapp-green-dark: #128C7E;
+  --whatsapp-green-light: #DCF8C6;
+  --dark-slate: #0F172A;
+  --light-background: #F8FAFC;
+  --accent-indigo: #6366F1;
+  
+  /* Legacy variables */
+  --background: #F8FAFC;
+  --foreground: #0F172A;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-whatsapp-green: #25D366;
+  --color-whatsapp-green-dark: #128C7E;
+  --color-whatsapp-green-light: #DCF8C6;
+  --color-dark-slate: #0F172A;
+  --color-light-background: #F8FAFC;
+  --color-accent-indigo: #6366F1;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0F172A;
+    --foreground: #F8FAFC;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Safe area insets for iOS devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Hide scrollbar for horizontal scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ensure all form inputs have black text color */
+input,
+select,
+textarea {
+  color: #000000;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
 }
