@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
         source: '/health-check',
         destination: `${backendUrl}/health-check`,
       },
+      {
+        source: '/user/:path',
+        destination: `${backendUrl}/user/:path`,
+      },
     ];
   },
 };

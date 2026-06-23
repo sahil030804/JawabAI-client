@@ -2,11 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, User } from '@/lib/api';
+import { api, User, WhatsAppAccount } from '@/lib/api';
 import { ApiError } from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
+  whatsappAccounts: WhatsAppAccount[];
+  activeWhatsappAccountId: number | null;
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
@@ -27,6 +29,8 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
+  const [activeWhatsappAccountId, setActiveWhatsappAccountId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -37,10 +41,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await api.getProfile();
-        console.log('AuthProvider - getProfile response:', response); // Debug log
-        if (response.success && response.user) {
-          setUser(response.user);
+        const response = await api.getPrivileges();
+        console.log('AuthProvider - getPrivileges response:', response); // Debug log
+        if (response.success && response.data) {
+          setUser(response.data.user);
+          setWhatsappAccounts(response.data.whatsappAccounts);
+          setActiveWhatsappAccountId(response.data.activeWhatsappAccountId);
         }
       } catch (err) {
         console.log('AuthProvider - No authenticated user found'); // Debug log
@@ -56,15 +62,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await api.getProfile();
-      if (response.success && response.user) {
-        setUser(response.user);
+      const response = await api.getPrivileges();
+      if (response.success && response.data) {
+        setUser(response.data.user);
+        setWhatsappAccounts(response.data.whatsappAccounts);
+        setActiveWhatsappAccountId(response.data.activeWhatsappAccountId);
       } else {
         setUser(null);
+        setWhatsappAccounts([]);
+        setActiveWhatsappAccountId(null);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setUser(null);
+        setWhatsappAccounts([]);
+        setActiveWhatsappAccountId(null);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to check authentication');
       }
@@ -138,6 +150,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value: AuthContextType = {
     user,
+    whatsappAccounts,
+    activeWhatsappAccountId,
     loading,
     error,
     login,

@@ -20,7 +20,7 @@ type PageState =
   | { status: 'data'; documents: KnowledgeDocument[] };
 
 export default function KnowledgeBasePage() {
-  const { user } = useAuth();
+  const { user, activeWhatsappAccountId } = useAuth();
   const { success, error: toastError, ToastProvider } = useToast();
   const { usage, updateUsage } = useAppState();
 
@@ -142,7 +142,7 @@ export default function KnowledgeBasePage() {
     for (const file of files) {
       try {
         setUploadProgress(`Uploading "${file.name}"...`);
-        const response = await api.uploadDocument(file);
+        const response = await api.uploadDocument(file, activeWhatsappAccountId ?? undefined);
 
         if (response.success) {
           const doc = response.document;
@@ -222,7 +222,7 @@ export default function KnowledgeBasePage() {
     for (const file of files) {
       try {
         setUploadProgress(`Uploading "${file.name}"...`);
-        const response = await api.uploadDocument(file);
+        const response = await api.uploadDocument(file, activeWhatsappAccountId ?? undefined);
 
         if (response.success) {
           const doc = response.document;
@@ -268,6 +268,7 @@ export default function KnowledgeBasePage() {
 
           if (doc.status === 'ready') {
             success(`"${doc.originalName}" uploaded and processed successfully`);
+            updateUsage({ documentsUploaded: usage.documentsUploaded + 1 });
           }
         }
       } catch (err: any) {

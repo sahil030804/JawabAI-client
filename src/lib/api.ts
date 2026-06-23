@@ -109,6 +109,18 @@ export interface DocumentListResponse {
   message?: string;
 }
 
+// User Privileges types
+export interface UserPrivilegesData {
+  user: User;
+  whatsappAccounts: WhatsAppAccount[];
+  activeWhatsappAccountId: number | null;
+}
+
+export interface UserPrivilegesResponse {
+  success: boolean;
+  data: UserPrivilegesData;
+}
+
 export interface DocumentDetailResponse {
   success: boolean;
   document: KnowledgeDocument;
@@ -247,6 +259,10 @@ export const api = {
     apiRequest<ApiResponse>(`/knowledge-base/documents/${id}`, {
       method: 'DELETE',
     }),
+
+  // User Privileges
+  getPrivileges: () =>
+    apiRequest<UserPrivilegesResponse>('/user/privileges'),
 
   // System endpoints
   healthCheck: () =>
