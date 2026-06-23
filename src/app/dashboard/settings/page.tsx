@@ -1,23 +1,64 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/hooks/useToast';
+import { api, BusinessProfileData } from '@/lib/api';
+
+const EMPTY_PROFILE: BusinessProfileData = {
+  business_name: '',
+  industry: '',
+  description: '',
+  website: '',
+  assistant_name: 'Assistant',
+  tone: 'friendly_professional',
+  fallback_message: '',
+  business_hours: '',
+  escalation_note: '',
+};
+
+// Normalises nullable backend fields into '' so inputs stay controlled.
+function toFormProfile(p: BusinessProfileData): BusinessProfileData {
+  return {
+    business_name: p.business_name ?? '',
+    industry: p.industry ?? '',
+    description: p.description ?? '',
+    website: p.website ?? '',
+    assistant_name: p.assistant_name || 'Assistant',
+    tone: p.tone || 'friendly_professional',
+    fallback_message: p.fallback_message ?? '',
+    business_hours: p.business_hours ?? '',
+    escalation_note: p.escalation_note ?? '',
+  };
+}
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, checkAuth } = useAuth();
   const { success, error: toastError, ToastProvider } = useToast();
   const [activeTab, setActiveTab] = useState('account');
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: user?.fullName || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
   });
+
+  // Seed/refresh the account form whenever the authenticated user loads or changes.
+  // The user object is null on first render, so a useState initializer would never fill in.
+  useEffect(() => {
+    if (!user) return;
+    setFormData({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phoneNumber || '',
+    });
+  }, [user]);
 
   const tabs = [
     { id: 'account', label: 'Account' },
@@ -25,12 +66,72 @@ export default function SettingsPage() {
     { id: 'api', label: 'API Keys' },
   ];
 
+  const [profile, setProfile] = useState<BusinessProfileData>(EMPTY_PROFILE);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.getBusinessProfile();
+        if (!cancelled && res.success) {
+          setProfile(toFormProfile(res.profile));
+        }
+      } catch {
+        // Keep defaults if the profile can't be loaded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setProfileField = (key: keyof BusinessProfileData, value: string) =>
+    setProfile((prev) => ({ ...prev, [key]: value }));
+
   const handleSave = async () => {
+    const email = formData.email.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toastError('Please enter a valid email address');
+      return;
+    }
+
     setSaving(true);
-    // Simulate save — no backend PATCH endpoint exists yet
-    await new Promise(r => setTimeout(r, 800));
-    success('Settings saved successfully');
+    try {
+      const res = await api.updateProfile({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email,
+        phone: formData.phone.trim(),
+      });
+      if (res.success) {
+        // Server invalidated the user cache; re-fetch the canonical user so the
+        // sidebar/header and this form reflect the saved values.
+        await checkAuth();
+        success('Profile updated');
+      } else {
+        toastError(res.message || 'Failed to update profile');
+      }
+    } catch (err: any) {
+      toastError(err?.message || 'Failed to update profile');
+    }
     setSaving(false);
+  };
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const res = await api.updateBusinessProfile(profile);
+      if (res.success) {
+        setProfile(toFormProfile(res.profile));
+        success('Business profile saved');
+      } else {
+        toastError(res.message || 'Failed to save business profile');
+      }
+    } catch (err: any) {
+      toastError(err?.message || 'Failed to save business profile');
+    }
+    setSavingProfile(false);
   };
 
   if (!user) return null;
@@ -75,12 +176,20 @@ export default function SettingsPage() {
                   Profile Information
                 </h2>
                 <div className="space-y-5">
-                  <Input
-                    label="Full Name"
-                    value={formData.fullName}
-                    onChange={e => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                    placeholder="Your full name"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="First Name"
+                      value={formData.firstName}
+                      onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                      placeholder="First name"
+                    />
+                    <Input
+                      label="Last Name"
+                      value={formData.lastName}
+                      onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                      placeholder="Last name"
+                    />
+                  </div>
                   <Input
                     label="Email"
                     type="email"
@@ -114,7 +223,7 @@ export default function SettingsPage() {
                   <div className="flex justify-between py-2 border-b border-gray-100">
                     <span className="text-gray-500">Plan</span>
                     <span className="font-medium text-[#0F172A] capitalize">
-                      {user.role || 'Free'}
+                      {(user.plan || 'Free').toLowerCase()}
                     </span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-100">
@@ -132,9 +241,9 @@ export default function SettingsPage() {
                   <div className="flex justify-between py-2">
                     <span className="text-gray-500">Status</span>
                     <span className="inline-flex items-center space-x-1.5">
-                      <span className={`w-2 h-2 rounded-full ${user.isActive ? 'bg-[#25D366]' : 'bg-red-500'}`} />
+                      <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-[#25D366]' : 'bg-red-500'}`} />
                       <span className="font-medium text-[#0F172A]">
-                        {user.isActive ? 'Active' : 'Disabled'}
+                        {user.status === 'ACTIVE' ? 'Active' : 'Disabled'}
                       </span>
                     </span>
                   </div>
@@ -164,54 +273,135 @@ export default function SettingsPage() {
 
         {/* Business Tab */}
         {activeTab === 'business' && (
-          <Card>
-            <div className="p-6">
-              <h2 className="text-lg font-bold text-[#0F172A] mb-6">
-                Business Profile
-              </h2>
-              <div className="max-w-2xl space-y-5">
-                <Input
-                  label="Business Name"
-                  placeholder="Your business name"
-                />
-                <div>
-                  <label className="block text-sm font-medium text-[#0F172A] mb-2">
-                    Industry
-                  </label>
-                  <select className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm bg-white">
-                    <option value="">Select your industry</option>
-                    <option value="retail">Retail</option>
-                    <option value="food">Food & Beverage</option>
-                    <option value="healthcare">Healthcare</option>
-                    <option value="education">Education</option>
-                    <option value="services">Professional Services</option>
-                    <option value="ecommerce">E-commerce</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#0F172A] mb-2">
-                    Business Description
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Describe your business..."
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm resize-none"
+          <div className="max-w-2xl space-y-6">
+            <Card>
+              <div className="p-6">
+                <h2 className="text-lg font-bold text-[#0F172A] mb-1">
+                  Business Profile
+                </h2>
+                <p className="text-xs text-gray-500 mb-6">
+                  This information is given to your AI assistant so it can answer as your business.
+                </p>
+                <div className="space-y-5">
+                  <Input
+                    label="Business Name"
+                    placeholder="Your business name"
+                    value={profile.business_name ?? ''}
+                    onChange={(e) => setProfileField('business_name', e.target.value)}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                      Industry
+                    </label>
+                    <select
+                      value={profile.industry ?? ''}
+                      onChange={(e) => setProfileField('industry', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm bg-white"
+                    >
+                      <option value="">Select your industry</option>
+                      <option value="retail">Retail</option>
+                      <option value="food">Food &amp; Beverage</option>
+                      <option value="healthcare">Healthcare</option>
+                      <option value="education">Education</option>
+                      <option value="services">Professional Services</option>
+                      <option value="ecommerce">E-commerce</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                      Business Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Describe your business..."
+                      value={profile.description ?? ''}
+                      onChange={(e) => setProfileField('description', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm resize-none"
+                    />
+                  </div>
+                  <Input
+                    label="Website"
+                    type="url"
+                    placeholder="https://yourwebsite.com"
+                    value={profile.website ?? ''}
+                    onChange={(e) => setProfileField('website', e.target.value)}
                   />
                 </div>
-                <Input
-                  label="Website"
-                  type="url"
-                  placeholder="https://yourwebsite.com"
-                />
-                <div className="pt-4 border-t border-gray-100">
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Profile'}
-                  </Button>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="p-6">
+                <h2 className="text-lg font-bold text-[#0F172A] mb-1">
+                  AI Assistant
+                </h2>
+                <p className="text-xs text-gray-500 mb-6">
+                  Control how your assistant speaks and behaves in customer chats.
+                </p>
+                <div className="space-y-5">
+                  <Input
+                    label="Assistant Name"
+                    placeholder="e.g. Nova"
+                    value={profile.assistant_name ?? ''}
+                    onChange={(e) => setProfileField('assistant_name', e.target.value)}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                      Tone
+                    </label>
+                    <select
+                      value={profile.tone}
+                      onChange={(e) => setProfileField('tone', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm bg-white"
+                    >
+                      <option value="friendly_professional">Friendly &amp; professional</option>
+                      <option value="formal">Formal</option>
+                      <option value="casual">Casual</option>
+                      <option value="concise">Concise</option>
+                      <option value="enthusiastic">Enthusiastic</option>
+                    </select>
+                  </div>
+                  <Input
+                    label="Business Hours"
+                    placeholder="e.g. Mon–Sat, 9am–7pm"
+                    value={profile.business_hours ?? ''}
+                    onChange={(e) => setProfileField('business_hours', e.target.value)}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                      Fallback Message
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="What the assistant says when it doesn't know the answer"
+                      value={profile.fallback_message ?? ''}
+                      onChange={(e) => setProfileField('fallback_message', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#0F172A] mb-2">
+                      Escalate to a human when…
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. the customer asks for a refund or wants to speak to the owner"
+                      value={profile.escalation_note ?? ''}
+                      onChange={(e) => setProfileField('escalation_note', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm resize-none"
+                    />
+                  </div>
                 </div>
               </div>
+            </Card>
+
+            <div className="pt-1">
+              <Button onClick={handleSaveProfile} disabled={savingProfile}>
+                {savingProfile ? 'Saving...' : 'Save Profile'}
+              </Button>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* API Keys Tab */}

@@ -1,153 +1,114 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { api, ConversationListItem, ConversationMessage } from '@/lib/api';
 
-interface Message {
-  id: string;
-  role: 'customer' | 'ai';
-  content: string;
-  timestamp: string;
+function initials(name: string | null, phone: string): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+  }
+  return phone.slice(-2);
 }
 
-interface Conversation {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  lastMessage: string;
-  timestamp: string;
-  unread: number;
-  messages: Message[];
-  avatar: string;
+function relativeTime(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
 
-function generateMockConversations(): Conversation[] {
-  const now = new Date();
-  const time = (minsAgo: number) => {
-    const d = new Date(now.getTime() - minsAgo * 60000);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  return [
-    {
-      id: '1',
-      customerName: 'Priya Sharma',
-      customerPhone: '+91 98765 43210',
-      lastMessage: 'Thanks! I will check the size chart and get back to you.',
-      timestamp: '2 min ago',
-      unread: 2,
-      avatar: 'PS',
-      messages: [
-        { id: 'm1', role: 'customer', content: 'Hi, I saw your product on Instagram. Is the blue dress still available in medium size?', timestamp: time(15) },
-        { id: 'm2', role: 'ai', content: 'Hello Priya! Yes, the blue dress is available in medium size. It\'s one of our bestsellers! Would you like to place an order?', timestamp: time(14) },
-        { id: 'm3', role: 'customer', content: 'Great! What about the delivery time?', timestamp: time(10) },
-        { id: 'm4', role: 'ai', content: 'Standard delivery takes 3-5 business days. We also offer express delivery within 24 hours for an additional ₹99. Would you like me to check the size chart for you?', timestamp: time(9) },
-        { id: 'm5', role: 'customer', content: 'Thanks! I will check the size chart and get back to you.', timestamp: time(2) },
-      ],
-    },
-    {
-      id: '2',
-      customerName: 'Rahul Verma',
-      customerPhone: '+91 87654 32109',
-      lastMessage: 'Perfect, I will share my requirements via email.',
-      timestamp: '1 hour ago',
-      unread: 0,
-      avatar: 'RV',
-      messages: [
-        { id: 'm6', role: 'customer', content: 'Hi, I need bulk pricing for your catering service. We have an office event for 200 people.', timestamp: time(70) },
-        { id: 'm7', role: 'ai', content: 'Hello Rahul! Thank you for your interest. Our corporate catering starts at ₹350 per person for a standard menu. For 200 people, I can offer a special rate of ₹300 per person with a complimentary dessert platter. Would you like to see our menu options?', timestamp: time(69) },
-        { id: 'm8', role: 'customer', content: 'That sounds good. Can you share the menu options for vegetarian?', timestamp: time(65) },
-        { id: 'm9', role: 'ai', content: 'Absolutely! Our vegetarian menu includes:\n\n1. Starter: Paneer Tikka, Hara Bhara Kabab\n2. Main Course: Dal Makhani, Paneer Butter Masala, Mix Veg, Naan/Rice\n3. Dessert: Gulab Jamun, Ice Cream\n\nWe also have Jain and vegan options available.', timestamp: time(64) },
-        { id: 'm10', role: 'customer', content: 'Perfect, I will share my requirements via email.', timestamp: time(60) },
-      ],
-    },
-    {
-      id: '3',
-      customerName: 'Ananya Gupta',
-      customerPhone: '+91 76543 21098',
-      lastMessage: 'Oh okay, I understand. I will wait for the restock.',
-      timestamp: '3 hours ago',
-      unread: 1,
-      avatar: 'AG',
-      messages: [
-        { id: 'm11', role: 'customer', content: 'Hello! I ordered a pair of shoes last week but haven\'t received any tracking update.', timestamp: time(190) },
-        { id: 'm12', role: 'ai', content: 'Hello Ananya! I apologize for the inconvenience. Let me check your order status right away. Could you please share your order number?', timestamp: time(189) },
-        { id: 'm13', role: 'customer', content: 'Order #ORD-2024-7890', timestamp: time(185) },
-        { id: 'm14', role: 'ai', content: 'Thank you! I can see that your order is currently in transit. The estimated delivery is within 2 days. Here\'s your tracking link: https://track.example.com/ORD20247890\n\nIs there anything else I can help you with?', timestamp: time(184) },
-        { id: 'm15', role: 'customer', content: 'Actually I wanted the grey color but I ordered black by mistake. Can I change it?', timestamp: time(180) },
-        { id: 'm16', role: 'ai', content: 'I understand. Unfortunately, since the order is already in transit, I cannot change the color. However, you can initiate a return once delivered and place a new order for the grey variant. Our return policy is hassle-free with free pickup.', timestamp: time(179) },
-        { id: 'm17', role: 'customer', content: 'Oh okay, I understand. I will wait for the restock.', timestamp: time(175) },
-      ],
-    },
-    {
-      id: '4',
-      customerName: 'Vikram Singh',
-      customerPhone: '+91 65432 10987',
-      lastMessage: 'Perfect, looking forward to it.',
-      timestamp: '5 hours ago',
-      unread: 0,
-      avatar: 'VS',
-      messages: [
-        { id: 'm18', role: 'customer', content: 'Hi, I want to book a consultation for web development services.', timestamp: time(310) },
-        { id: 'm19', role: 'ai', content: 'Hello Vikram! Thank you for your interest. We offer the following web development packages:\n\n1. Basic: ₹25,000 (Landing page, 5 sections)\n2. Business: ₹55,000 (Multi-page, CMS, Blog)\n3. E-commerce: ₹85,000 (Shop, Payment gateway, Inventory)\n\nWhich package interests you?', timestamp: time(309) },
-        { id: 'm20', role: 'customer', content: 'I am interested in the Business package. Can I see some portfolio examples?', timestamp: time(305) },
-        { id: 'm21', role: 'ai', content: 'Absolutely! Here are some recent projects:\n\n1. ShopEase (E-commerce) - shopease.example.com\n2. GreenLeaf Organics (Business) - greenleaf.example.com\n3. Dr. Patel\'s Clinic (Booking System) - drpatel.example.com\n\nWould you like to schedule a free 30-minute consultation call?', timestamp: time(304) },
-        { id: 'm22', role: 'customer', content: 'Yes, please schedule it for this Friday at 11 AM.', timestamp: time(300) },
-        { id: 'm23', role: 'ai', content: 'Perfect! I\'ve scheduled your consultation for this Friday at 11:00 AM. You\'ll receive a Google Meet link via email shortly. Our senior developer will join the call.', timestamp: time(299) },
-        { id: 'm24', role: 'customer', content: 'Perfect, looking forward to it.', timestamp: time(295) },
-      ],
-    },
-    {
-      id: '5',
-      customerName: 'Neha Patel',
-      customerPhone: '+91 54321 09876',
-      lastMessage: 'Done! Already shared with my friends 😊',
-      timestamp: '1 day ago',
-      unread: 0,
-      avatar: 'NP',
-      messages: [
-        { id: 'm25', role: 'customer', content: 'Hey! I received my order today and I absolutely LOVE it! The quality is amazing!', timestamp: time(1440) },
-        { id: 'm26', role: 'ai', content: 'That makes us so happy to hear, Neha! 🌟 Thank you for your kind words. We take great pride in our product quality.\n\nAs a thank you, here\'s a special discount code: WELCOME10 for 10% off your next purchase!', timestamp: time(1439) },
-        { id: 'm27', role: 'customer', content: 'Wow thank you! I will definitely order again soon. Can I also leave a review?', timestamp: time(1435) },
-        { id: 'm28', role: 'ai', content: 'Of course! We would love to hear your feedback. You can leave a review here: https://example.com/review/ORD20247891\n\nAlso, if you share your experience on Instagram and tag us (@jawabai), you get a chance to win a ₹500 gift voucher!', timestamp: time(1434) },
-        { id: 'm29', role: 'customer', content: 'Done! Already shared with my friends 😊', timestamp: time(1420) },
-      ],
-    },
-  ];
-}
-
-function formatTime(dateStr: string): string {
-  return dateStr;
+function formatClock(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function ConversationsPage() {
   const { user } = useAuth();
-  const [conversations] = useState<Conversation[]>(generateMockConversations);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [newMessage, setNewMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const selectedConversation = conversations.find(c => c.id === selectedId);
+  const selectedConversation = conversations.find((c) => c.id === selectedId);
 
-  const filteredConversations = conversations.filter(c =>
-    c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.customerPhone.includes(searchQuery)
-  );
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res = await api.getConversations();
+      if (res.success) {
+        setConversations(res.conversations);
+        setListError(null);
+      } else {
+        setListError(res.message || 'Failed to load conversations');
+      }
+    } catch (err: any) {
+      setListError(err?.message || 'Failed to load conversations');
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  const fetchMessages = useCallback(async (id: number, showSpinner = true) => {
+    if (showSpinner) setMessagesLoading(true);
+    try {
+      const res = await api.getConversationMessages(id);
+      if (res.success) {
+        setMessages(res.messages);
+        // Reflect the read state locally.
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
+        );
+      }
+    } catch {
+      // Keep whatever is on screen; transient errors are non-fatal here.
+    } finally {
+      if (showSpinner) setMessagesLoading(false);
+    }
+  }, []);
+
+  // Initial load + poll the list so new conversations appear.
+  useEffect(() => {
+    if (!user) return;
+    fetchConversations();
+    const interval = setInterval(fetchConversations, 15000);
+    return () => clearInterval(interval);
+  }, [user, fetchConversations]);
+
+  // Load + poll the open thread for new AI/customer messages.
+  useEffect(() => {
+    if (selectedId == null) return;
+    fetchMessages(selectedId, true);
+    const interval = setInterval(() => fetchMessages(selectedId, false), 8000);
+    return () => clearInterval(interval);
+  }, [selectedId, fetchMessages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedId]);
+  }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedConversation) return;
-    // Mock: just add message to local state
-    setNewMessage('');
-  };
+  const filteredConversations = conversations.filter((c) => {
+    const name = (c.customer_name || '').toLowerCase();
+    return (
+      name.includes(searchQuery.toLowerCase()) ||
+      c.customer_phone.includes(searchQuery)
+    );
+  });
 
   if (!user) return null;
 
@@ -176,19 +137,27 @@ export default function ConversationsPage() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search conversations..."
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm bg-gray-50"
                   />
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-                {filteredConversations.length === 0 ? (
+                {listLoading ? (
+                  <div className="p-6 text-center text-sm text-gray-400">Loading…</div>
+                ) : listError ? (
+                  <div className="p-4">
+                    <ErrorState message={listError} onRetry={fetchConversations} />
+                  </div>
+                ) : filteredConversations.length === 0 ? (
                   <div className="p-6 text-center text-sm text-gray-500">
-                    {searchQuery ? 'No conversations match your search' : 'No conversations yet'}
+                    {searchQuery
+                      ? 'No conversations match your search'
+                      : 'No conversations yet. They appear here once customers message your number.'}
                   </div>
                 ) : (
-                  filteredConversations.map(conv => (
+                  filteredConversations.map((conv) => (
                     <button
                       key={conv.id}
                       onClick={() => setSelectedId(conv.id)}
@@ -197,27 +166,28 @@ export default function ConversationsPage() {
                       }`}
                     >
                       <div className="flex items-start space-x-3">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0"
+                        <div
+                          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0"
                           style={{ backgroundColor: selectedId === conv.id ? '#25D366' : '#0F172A' }}
                         >
-                          {conv.avatar}
+                          {initials(conv.customer_name, conv.customer_phone)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <p className="font-semibold text-[#0F172A] text-sm truncate">
-                              {conv.customerName}
+                              {conv.customer_name || conv.customer_phone}
                             </p>
                             <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                              {conv.timestamp}
+                              {relativeTime(conv.last_message_at)}
                             </span>
                           </div>
                           <p className="text-xs sm:text-sm text-gray-500 truncate mt-0.5">
-                            {conv.lastMessage}
+                            {conv.last_message || 'No messages yet'}
                           </p>
                         </div>
-                        {conv.unread > 0 && (
+                        {conv.unread_count > 0 && (
                           <div className="w-5 h-5 sm:w-6 sm:h-6 bg-[#25D366] rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                            {conv.unread}
+                            {conv.unread_count}
                           </div>
                         )}
                       </div>
@@ -244,14 +214,14 @@ export default function ConversationsPage() {
                       </svg>
                     </button>
                     <div className="w-9 h-9 sm:w-10 sm:h-10 bg-[#0F172A] rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                      {selectedConversation.avatar}
+                      {initials(selectedConversation.customer_name, selectedConversation.customer_phone)}
                     </div>
                     <div>
                       <p className="font-semibold text-[#0F172A] text-sm sm:text-base">
-                        {selectedConversation.customerName}
+                        {selectedConversation.customer_name || selectedConversation.customer_phone}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {selectedConversation.customerPhone}
+                        {selectedConversation.customer_phone}
                       </p>
                     </div>
                   </div>
@@ -263,49 +233,55 @@ export default function ConversationsPage() {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-[#F8FAFC]">
-                  {selectedConversation.messages.map(msg => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${msg.role === 'customer' ? 'justify-start' : 'justify-end'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
-                          msg.role === 'customer'
-                            ? 'bg-white text-[#0F172A] border border-gray-100 shadow-sm'
-                            : 'bg-[#25D366] text-white shadow-sm'
-                        }`}
-                      >
-                        <p className="text-sm whitespace-pre-line">{msg.content}</p>
-                        <p
-                          className={`text-[10px] mt-1.5 ${
-                            msg.role === 'customer' ? 'text-gray-400' : 'text-white/70'
-                          }`}
+                  {messagesLoading ? (
+                    <div className="text-center text-sm text-gray-400 py-6">Loading messages…</div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center text-sm text-gray-400 py-6">No messages in this conversation yet.</div>
+                  ) : (
+                    messages.map((msg) => {
+                      const isCustomer = msg.role === 'user';
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}
                         >
-                          {formatTime(msg.timestamp)}
-                          {msg.role === 'ai' && (
-                            <span className="ml-2 inline-flex items-center">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                              </svg>
-                              <span className="ml-1">AI</span>
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                          <div
+                            className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                              isCustomer
+                                ? 'bg-white text-[#0F172A] border border-gray-100 shadow-sm'
+                                : 'bg-[#25D366] text-white shadow-sm'
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                            <p
+                              className={`text-[10px] mt-1.5 ${
+                                isCustomer ? 'text-gray-400' : 'text-white/70'
+                              }`}
+                            >
+                              {formatClock(msg.created_at)}
+                              {!isCustomer && (
+                                <span className="ml-2 inline-flex items-center">
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </svg>
+                                  <span className="ml-1">AI</span>
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                   <div ref={chatEndRef} />
                 </div>
 
-                {/* Message Input */}
+                {/* Message Input (manual replies are a premium feature) */}
                 <div className="p-3 sm:p-4 border-t border-gray-100 bg-white rounded-b-xl">
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 relative">
                       <input
                         type="text"
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                         placeholder="Reply as business..."
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent text-sm bg-gray-50 pr-10"
                         disabled

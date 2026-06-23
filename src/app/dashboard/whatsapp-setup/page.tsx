@@ -10,6 +10,8 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
+import { WebhookActivityPanel } from '@/components/WebhookActivityPanel';
+import { EmbeddedSignupButton } from '@/components/EmbeddedSignupButton';
 import { useToast } from '@/hooks/useToast';
 import { api, WhatsAppAccount } from '@/lib/api';
 
@@ -73,12 +75,28 @@ export default function WhatsAppSetupPage() {
     const code = params.get('code');
     const stateParam = params.get('state');
 
+    // Surface Meta OAuth errors (denials/cancellations) instead of failing silently.
+    const errorParam = params.get('error') || params.get('error_code');
+    const errorDesc =
+      params.get('error_description') ||
+      params.get('error_reason') ||
+      params.get('error_message');
+
+    if (errorParam) {
+      toastError(
+        `WhatsApp connection failed: ${errorDesc || errorParam}`,
+      );
+      window.history.replaceState({}, '', '/dashboard/whatsapp-setup');
+      fetchAccounts();
+      return;
+    }
+
     if (code) {
       handleOAuthCallback(code, stateParam || '');
     } else {
       fetchAccounts();
     }
-  }, [user, fetchAccounts, handleOAuthCallback]);
+  }, [user, fetchAccounts, handleOAuthCallback, toastError]);
 
   const handleConnect = async () => {
     try {
@@ -284,31 +302,21 @@ export default function WhatsAppSetupPage() {
                   Connect Your WhatsApp Business Account
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-6">
-                  Authorize JawabAI to send and receive messages on behalf of your business. You&apos;ll be redirected to Meta to grant permissions.
+                  Connect in one click with Meta Embedded Signup. With Coexistence you keep using the WhatsApp Business app on your phone while JawabAI replies on your behalf.
                 </p>
-                <Button
+                <EmbeddedSignupButton
+                  onSuccess={success}
+                  onError={toastError}
+                  onConnected={fetchAccounts}
+                />
+                <button
+                  type="button"
                   onClick={handleConnect}
                   disabled={connecting}
-                  size="lg"
-                  className="w-full sm:w-auto"
+                  className="block mx-auto mt-4 text-xs text-gray-500 hover:text-[#25D366] underline disabled:opacity-50"
                 >
-                  {connecting ? (
-                    <span className="flex items-center space-x-2">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Connecting...</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center space-x-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                      <span>Connect WhatsApp Business</span>
-                    </span>
-                  )}
-                </Button>
+                  {connecting ? 'Connecting…' : 'Or connect manually (classic OAuth)'}
+                </button>
                 {authUrl && (
                   <p className="text-xs text-gray-500 mt-4">
                     If you are not redirected automatically,{' '}
@@ -382,6 +390,9 @@ export default function WhatsAppSetupPage() {
             </div>
           </Card>
         )}
+
+        {/* Webhook activity — live diagnostics for inbound message delivery */}
+        {state.status !== 'loading' && <WebhookActivityPanel />}
       </div>
 
       {/* Disconnect Confirmation Modal */}

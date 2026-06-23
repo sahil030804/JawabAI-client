@@ -16,17 +16,25 @@ export interface EmailCheckResponse {
 }
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
-  fullName: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  avatarUrl?: string;
-  isActive: boolean;
+  fullName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
   role: string;
+  status: string;
+  plan: string;
+  onboardingCompleted?: boolean;
   createdAt: string;
-  lastLoginAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateProfileData {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  email?: string;
 }
 
 export interface LoginCredentials {
@@ -72,6 +80,27 @@ export interface ExchangeTokenResponse {
   message?: string;
 }
 
+// Embedded Signup (Coexistence)
+export interface EmbeddedSignupConfig {
+  appId: string;
+  configId: string;
+  graphApiVersion: string;
+  featureType: string;
+  configured: boolean;
+}
+
+export interface EmbeddedSignupConfigResponse {
+  success: boolean;
+  config: EmbeddedSignupConfig;
+  message?: string;
+}
+
+export interface EmbeddedSignupRequest {
+  code: string;
+  wabaId: string;
+  phoneNumberId?: string;
+}
+
 export interface WhatsAppAccountsResponse {
   success: boolean;
   accounts: WhatsAppAccount[];
@@ -106,6 +135,97 @@ export interface UploadDocumentResponse {
 export interface DocumentListResponse {
   success: boolean;
   documents: KnowledgeDocument[];
+  message?: string;
+}
+
+// Webhook debug types
+export interface WebhookEventItem {
+  id: number;
+  object: string | null;
+  field: string | null;
+  phone_number_id: string | null;
+  from_number: string | null;
+  wa_message_id: string | null;
+  message_type: string | null;
+  matched_account_id: number | null;
+  direction: string;
+  processing_status: string;
+  signature_valid: boolean | null;
+  payload: any;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface WebhookEventsResponse {
+  success: boolean;
+  events: WebhookEventItem[];
+  message?: string;
+}
+
+// Business profile + agent persona
+export interface BusinessProfileData {
+  user_id?: string;
+  business_name: string | null;
+  industry: string | null;
+  description: string | null;
+  website: string | null;
+  assistant_name: string;
+  tone: string;
+  fallback_message: string | null;
+  business_hours: string | null;
+  escalation_note: string | null;
+}
+
+export interface BusinessProfileResponse {
+  success: boolean;
+  profile: BusinessProfileData;
+  message?: string;
+}
+
+export interface AiTestResponse {
+  success: boolean;
+  reply: string;
+  usedKnowledge: boolean;
+  chunkCount: number;
+  hasAccount: boolean;
+  message?: string;
+}
+
+// Conversations
+export interface ConversationListItem {
+  id: number;
+  wa_account_id: number;
+  customer_name: string | null;
+  customer_phone: string;
+  unread_count: number;
+  last_message: string | null;
+  last_message_role: 'user' | 'assistant' | null;
+  last_message_at: string | null;
+}
+
+export interface ConversationsListResponse {
+  success: boolean;
+  conversations: ConversationListItem[];
+  message?: string;
+}
+
+export interface ConversationMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  wa_message_id: string | null;
+  created_at: string;
+}
+
+export interface ConversationMessagesResponse {
+  success: boolean;
+  conversation: {
+    id: number;
+    customer_name: string | null;
+    customer_phone: string;
+    wa_account_id: number;
+  };
+  messages: ConversationMessage[];
   message?: string;
 }
 
@@ -214,6 +334,12 @@ export const api = {
   getProfile: () =>
     apiRequest<ApiResponse<User>>('/auth/profile'),
 
+  updateProfile: (data: UpdateProfileData) =>
+    apiRequest<ApiResponse<User>>('/user/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
   checkEmail: (email: string) =>
     apiRequest<EmailCheckResponse>(`/auth/check-email/${email}`),
 
@@ -227,6 +353,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  getEmbeddedSignupConfig: () =>
+    apiRequest<EmbeddedSignupConfigResponse>('/meta/embedded-signup/config'),
+
+  embeddedSignup: (data: EmbeddedSignupRequest) =>
+    apiRequest<ExchangeTokenResponse>('/meta/embedded-signup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   getAccounts: () =>
     apiRequest<WhatsAppAccountsResponse>('/meta/accounts'),
 
@@ -234,6 +369,10 @@ export const api = {
     apiRequest<ApiResponse>(`/meta/accounts/${id}`, {
       method: 'DELETE',
     }),
+
+  // Webhook debug: recent inbound events (diagnose delivery vs. silent drops)
+  getWebhookEvents: (limit = 50) =>
+    apiRequest<WebhookEventsResponse>(`/meta/webhook/events?limit=${limit}`),
 
   // Knowledge Base endpoints
   uploadDocument: (file: File, waAccountId?: number) => {
@@ -259,6 +398,29 @@ export const api = {
     apiRequest<ApiResponse>(`/knowledge-base/documents/${id}`, {
       method: 'DELETE',
     }),
+
+  // Business profile + agent persona
+  getBusinessProfile: () =>
+    apiRequest<BusinessProfileResponse>('/user/business-profile'),
+
+  updateBusinessProfile: (data: Partial<BusinessProfileData>) =>
+    apiRequest<BusinessProfileResponse>('/user/business-profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  testAI: (message: string) =>
+    apiRequest<AiTestResponse>('/user/ai-test', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
+
+  // Conversations
+  getConversations: () =>
+    apiRequest<ConversationsListResponse>('/conversations'),
+
+  getConversationMessages: (id: number) =>
+    apiRequest<ConversationMessagesResponse>(`/conversations/${id}/messages`),
 
   // User Privileges
   getPrivileges: () =>

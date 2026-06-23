@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ConnectionHealth } from '@/components/ConnectionHealth';
+import { TestAssistantPanel } from '@/components/TestAssistantPanel';
 import { useAppState } from '@/hooks/useAppState';
 import { api, KnowledgeDocument, WhatsAppAccount } from '@/lib/api';
 
@@ -66,6 +68,9 @@ export default function DashboardPage() {
             Here&apos;s what&apos;s happening with your WhatsApp assistant today.
           </p>
         </div>
+
+        {/* Connection health — driven by live webhook activity */}
+        <ConnectionHealth />
 
         {/* Free mode banner */}
         {!connectedAccounts && (
@@ -220,6 +225,11 @@ export default function DashboardPage() {
               </div>
             </Card>
           </Link>
+        </div>
+
+        {/* Test your assistant */}
+        <div className="mb-6 sm:mb-8">
+          <TestAssistantPanel />
         </div>
 
         {/* Recent Activity */}

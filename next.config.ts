@@ -19,12 +19,16 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/knowledge-base/:path*`,
       },
       {
+        source: '/conversations/:path*',
+        destination: `${backendUrl}/conversations/:path*`,
+      },
+      {
         source: '/health-check',
         destination: `${backendUrl}/health-check`,
       },
       {
-        source: '/user/:path',
-        destination: `${backendUrl}/user/:path`,
+        source: '/user/:path*',
+        destination: `${backendUrl}/user/:path*`,
       },
     ];
   },
