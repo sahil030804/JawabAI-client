@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '@/lib/api';
 
 export type AppState = 'freeMode' | 'trialActive' | 'limitReached' | 'paidUser' | 'upgradeRequired';
 
@@ -20,7 +21,30 @@ export const useAppState = () => {
     documentsLimit: 2,
   });
 
-  // Load state from localStorage on mount
+  // Fetch usage from server on mount (source of truth)
+  const refreshUsage = useCallback(async () => {
+    try {
+      const response = await api.getUsage();
+      if (response.success) {
+        const serverUsage = {
+          aiRepliesUsed: response.usage.aiRepliesUsed,
+          aiRepliesLimit: response.usage.aiRepliesLimit,
+          documentsUploaded: response.usage.documentsUploaded,
+          documentsLimit: response.usage.documentsLimit,
+        };
+        setUsage(serverUsage);
+        localStorage.setItem('jawabai_usage', JSON.stringify(serverUsage));
+
+        if (serverUsage.aiRepliesUsed >= serverUsage.aiRepliesLimit && appState === 'freeMode') {
+          updateAppState('limitReached');
+        }
+      }
+    } catch {
+      // API failed — rely on localStorage values
+    }
+  }, []);
+
+  // Load from localStorage on mount, then fetch from API
   useEffect(() => {
     const savedState = localStorage.getItem('jawabai_app_state');
     const savedUsage = localStorage.getItem('jawabai_usage');
@@ -35,7 +59,10 @@ export const useAppState = () => {
         }
       });
     }
-  }, []);
+
+    // Fetch authoritative usage from server after localStorage load
+    refreshUsage();
+  }, [refreshUsage]);
 
   // Persist state to localStorage
   const updateAppState = (newState: AppState) => {
@@ -60,6 +87,10 @@ export const useAppState = () => {
 
   const incrementDocuments = () => {
     updateUsage({ documentsUploaded: usage.documentsUploaded + 1 });
+  };
+
+  const syncDocumentsCount = (count: number) => {
+    updateUsage({ documentsUploaded: count });
   };
 
   const canUploadDocument = () => {
@@ -88,8 +119,10 @@ export const useAppState = () => {
     updateUsage,
     incrementAiReplies,
     incrementDocuments,
+    syncDocumentsCount,
     canUploadDocument,
     canUseAiReply,
     resetUsage,
+    refreshUsage,
   };
 };

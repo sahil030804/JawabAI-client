@@ -68,8 +68,10 @@ export interface WhatsAppAccount {
   waba_id: string;
   business_id: string;
   phone_number_id: string;
+  display_phone_number?: string;
   webhook_id?: string;
   is_active: boolean;
+  auto_reply_enabled: boolean;
   token_expires_at: string;
   created_at: string;
 }
@@ -241,6 +243,19 @@ export interface UserPrivilegesResponse {
   data: UserPrivilegesData;
 }
 
+export interface UsageData {
+  aiRepliesUsed: number;
+  aiRepliesLimit: number;
+  documentsUploaded: number;
+  documentsLimit: number;
+}
+
+export interface UsageResponse {
+  success: boolean;
+  usage: UsageData;
+  message?: string;
+}
+
 export interface DocumentDetailResponse {
   success: boolean;
   document: KnowledgeDocument;
@@ -399,6 +414,12 @@ export const api = {
       method: 'DELETE',
     }),
 
+  toggleAutoReply: (id: number, enabled: boolean) =>
+    apiRequest<{ success: boolean; auto_reply_enabled: boolean; message?: string }>(`/meta/accounts/${id}/auto-reply`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    }),
+
   // Business profile + agent persona
   getBusinessProfile: () =>
     apiRequest<BusinessProfileResponse>('/user/business-profile'),
@@ -425,6 +446,10 @@ export const api = {
   // User Privileges
   getPrivileges: () =>
     apiRequest<UserPrivilegesResponse>('/user/privileges'),
+
+  // Usage
+  getUsage: () =>
+    apiRequest<UsageResponse>('/user/usage'),
 
   // System endpoints
   healthCheck: () =>

@@ -22,7 +22,7 @@ type PageState =
 export default function KnowledgeBasePage() {
   const { user, activeWhatsappAccountId } = useAuth();
   const { success, error: toastError, ToastProvider } = useToast();
-  const { usage, updateUsage } = useAppState();
+  const { usage, updateUsage, syncDocumentsCount } = useAppState();
 
   const [pageState, setPageState] = useState<PageState>({ status: 'loading' });
   const [uploading, setUploading] = useState(false);
@@ -31,7 +31,8 @@ export default function KnowledgeBasePage() {
   const [pollingIds, setPollingIds] = useState<Set<number>>(new Set());
   const pollRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
-  const limitReached = usage.documentsUploaded >= usage.documentsLimit;
+  const documentCount = pageState.status === 'data' ? pageState.documents.length : usage.documentsUploaded;
+  const limitReached = documentCount >= usage.documentsLimit;
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -42,6 +43,7 @@ export default function KnowledgeBasePage() {
           setPageState({ status: 'empty' });
         } else {
           setPageState({ status: 'data', documents: docs });
+          syncDocumentsCount(docs.length);
           // Check if any docs need polling
           const pending = docs.filter(
             d => d.status === 'pending' || d.status === 'processing'
@@ -111,7 +113,6 @@ export default function KnowledgeBasePage() {
 
               if (doc.status === 'ready') {
                 success(`"${doc.original_name}" processed successfully`);
-                updateUsage({ documentsUploaded: usage.documentsUploaded + 1 });
               } else if (doc.status === 'failed') {
                 toastError(`"${doc.original_name}" processing failed: ${doc.error_message || 'Unknown error'}`);
               }
@@ -190,7 +191,6 @@ export default function KnowledgeBasePage() {
 
           if (doc.status === 'ready') {
             success(`"${doc.originalName}" uploaded and processed successfully`);
-            updateUsage({ documentsUploaded: usage.documentsUploaded + 1 });
           } else {
             success(`"${doc.originalName}" uploaded — processing in background`);
           }
@@ -268,7 +268,6 @@ export default function KnowledgeBasePage() {
 
           if (doc.status === 'ready') {
             success(`"${doc.originalName}" uploaded and processed successfully`);
-            updateUsage({ documentsUploaded: usage.documentsUploaded + 1 });
           }
         }
       } catch (err: any) {
@@ -296,7 +295,6 @@ export default function KnowledgeBasePage() {
           if (remaining.length === 0) return { status: 'empty' };
           return { status: 'data', documents: remaining };
         });
-        updateUsage({ documentsUploaded: Math.max(0, usage.documentsUploaded - 1) });
       } else {
         toastError(response.message || 'Delete failed');
       }
@@ -348,12 +346,12 @@ export default function KnowledgeBasePage() {
                   Storage Usage
                 </p>
                 <p className="text-xs sm:text-sm text-gray-500">
-                  {usage.documentsUploaded} of {usage.documentsLimit} documents uploaded
+                  {documentCount} of {usage.documentsLimit} documents uploaded
                 </p>
               </div>
               <span className="text-lg sm:text-xl font-bold text-[#25D366]">
                 {usage.documentsLimit > 0
-                  ? Math.round((usage.documentsUploaded / usage.documentsLimit) * 100)
+                  ? Math.round((documentCount / usage.documentsLimit) * 100)
                   : 0}%
               </span>
             </div>
@@ -362,7 +360,7 @@ export default function KnowledgeBasePage() {
                 className="bg-[#25D366] h-2.5 rounded-full transition-all duration-500"
                 style={{
                   width: `${usage.documentsLimit > 0
-                    ? Math.min((usage.documentsUploaded / usage.documentsLimit) * 100, 100)
+                    ? Math.min((documentCount / usage.documentsLimit) * 100, 100)
                     : 0}%`,
                 }}
               />

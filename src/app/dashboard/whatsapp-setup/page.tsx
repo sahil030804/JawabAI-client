@@ -217,7 +217,7 @@ export default function WhatsAppSetupPage() {
                         </div>
                         <div>
                           <p className="font-semibold text-[#0F172A] text-sm sm:text-base">
-                            {formatPhoneNumber(account.phone_number_id)}
+                            {account.display_phone_number || formatPhoneNumber(account.phone_number_id)}
                           </p>
                           <div className="flex items-center space-x-3 mt-1">
                             <StatusBadge status={account.is_active ? 'active' : 'inactive'} />
@@ -257,7 +257,7 @@ export default function WhatsAppSetupPage() {
                     <div key={account.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-gray-600">
-                          {formatPhoneNumber(account.phone_number_id)}
+                          {account.display_phone_number || formatPhoneNumber(account.phone_number_id)}
                         </span>
                         <div className="flex items-center space-x-1.5">
                           <span className={`w-2 h-2 rounded-full ${account.is_active ? 'bg-[#25D366]' : 'bg-gray-400'}`} />
